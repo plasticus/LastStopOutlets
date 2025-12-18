@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Last Stop Outlets</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="game-container">
+        <header>
+            <div id="game-title">Last Stop Outlets 🛍️</div>
+            <div id="header-info">
+                <div id="day-display">Day 1</div>
+                <div id="weather-display">Weather: Clear</div>
+            </div>
+        </header>
+
+        <section id="resource-bar">
+            </section>
+
+        <section id="log-panel">
+            <h3>Outlet Log</h3>
+            <div id="log-output"></div>
+        </section>
+
+        <main>
+            <section id="buildings-panel">
+                <h2>Facilities (Cost: Scrap)</h2>
+                <div id="building-list"></div>
+            </section>
+
+            <section id="assignments-panel">
+                <h2>Work Assignments</h2>
+                <div class="survivor-count" style="margin-bottom:15px">
+                    Unassigned Survivors: <span id="unassigned-count">0</span>
+                </div>
+                <div id="job-list"></div>
+                <button id="end-day-btn" onclick="endDay()">END DAY</button>
+            </section>
+        </main>
+    </div>
+
+    <div id="event-modal" class="hidden">
+        <div class="event-content">
+            <h2 id="event-title">Event Title</h2>
+            <p id="event-desc">Description goes here...</p>
+            <div id="event-choices">
+                </div>
+        </div>
+    </div>
+
+    <div id="defense-overlay" class="hidden">
+        <div id="defense-ui">
+            <h2>⚠️ DEFEND THE OUTLET ⚠️</h2>
+            <div id="defense-stats">
+                <span>Wave: <span id="wave-num">1</span>/3</span>
+                <span>Wall HP: <span id="wall-hp">100</span>%</span>
+            </div>
+            <canvas id="defense-canvas" width="800" height="500"></canvas>
+            <button id="start-wave-btn" onclick="DefenseGame.startNextWave()">START WAVE</button>
+        </div>
+    </div>
+
+    <script src="events.js"></script>
+    <script src="config.js"></script>
+    <script src="flavor.js"></script>
+    <script src="defense.js"></script> <script src="game.js"></script>
+</body>
+</html>

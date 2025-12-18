@@ -1,0 +1,270 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Mini Tower Defense</title>
+  <style>
+    body { margin: 0; background:#111; color:#ddd; font-family: system-ui; }
+    #ui { padding: 10px; }
+    canvas { display:block; margin: 0 auto; background:#0b1220; border:1px solid #223; }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    Click on the map to place a tower. Towers auto-shoot. (Very simple demo)
+    <span id="stats"></span>
+  </div>
+  <canvas id="c" width="900" height="520"></canvas>
+
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+const statsEl = document.getElementById("stats");
+
+const path = [
+  {x: 40, y: 260},
+  {x: 250, y: 260},
+  {x: 250, y: 120},
+  {x: 520, y: 120},
+  {x: 520, y: 390},
+  {x: 860, y: 390},
+];
+
+let gold = 50;
+let lives = 20;
+let wave = 0;
+
+const enemies = [];
+const towers = [];
+const bullets = [];
+
+function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
+
+class Enemy {
+  constructor() {
+    this.pos = { ...path[0] };
+    this.i = 0;
+    this.speed = 60;     // px/sec
+    this.hp = 30;
+    this.maxHp = 30;
+    this.radius = 10;
+    this.alive = true;
+    this.reward = 5;
+  }
+  update(dt) {
+    if (!this.alive) return;
+    const next = path[this.i + 1];
+    if (!next) { // reached end
+      this.alive = false;
+      lives--;
+      return;
+    }
+    const dir = { x: next.x - this.pos.x, y: next.y - this.pos.y };
+    const len = Math.hypot(dir.x, dir.y) || 1;
+    const step = this.speed * dt;
+    if (step >= len) {
+      this.pos = { ...next };
+      this.i++;
+    } else {
+      this.pos.x += (dir.x / len) * step;
+      this.pos.y += (dir.y / len) * step;
+    }
+  }
+  draw() {
+    if (!this.alive) return;
+    // body
+    ctx.beginPath();
+    ctx.arc(this.pos.x, this.pos.y, this.radius, 0, Math.PI*2);
+    ctx.fillStyle = "#f87171";
+    ctx.fill();
+    // hp bar
+    const w = 28, h = 4;
+    const pct = Math.max(0, this.hp / this.maxHp);
+    ctx.fillStyle = "#111";
+    ctx.fillRect(this.pos.x - w/2, this.pos.y - 18, w, h);
+    ctx.fillStyle = "#34d399";
+    ctx.fillRect(this.pos.x - w/2, this.pos.y - 18, w * pct, h);
+  }
+}
+
+class Tower {
+  constructor(x,y) {
+    this.pos = {x,y};
+    this.range = 120;
+    this.fireRate = 1.3; // shots/sec
+    this.cooldown = 0;
+    this.cost = 10;
+  }
+  update(dt) {
+    this.cooldown -= dt;
+    if (this.cooldown > 0) return;
+
+    // pick nearest enemy in range
+    let best = null;
+    let bestD = Infinity;
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      const d = dist(this.pos, e.pos);
+      if (d <= this.range && d < bestD) { best = e; bestD = d; }
+    }
+    if (!best) return;
+
+    bullets.push(new Bullet(this.pos.x, this.pos.y, best));
+    this.cooldown = 1 / this.fireRate;
+  }
+  draw() {
+    // range ring (subtle)
+    ctx.beginPath();
+    ctx.arc(this.pos.x, this.pos.y, this.range, 0, Math.PI*2);
+    ctx.strokeStyle = "rgba(148,163,184,0.10)";
+    ctx.stroke();
+
+    // tower body
+    ctx.beginPath();
+    ctx.arc(this.pos.x, this.pos.y, 12, 0, Math.PI*2);
+    ctx.fillStyle = "#60a5fa";
+    ctx.fill();
+    ctx.strokeStyle = "#0b1220";
+    ctx.stroke();
+  }
+}
+
+class Bullet {
+  constructor(x,y,target) {
+    this.pos = {x,y};
+    this.target = target;
+    this.speed = 260;
+    this.damage = 10;
+    this.alive = true;
+    this.radius = 3;
+  }
+  update(dt) {
+    if (!this.alive) return;
+    if (!this.target.alive) { this.alive = false; return; }
+
+    const dir = { x: this.target.pos.x - this.pos.x, y: this.target.pos.y - this.pos.y };
+    const len = Math.hypot(dir.x, dir.y) || 1;
+    const step = this.speed * dt;
+
+    if (step >= len) {
+      // hit
+      this.target.hp -= this.damage;
+      if (this.target.hp <= 0) {
+        this.target.alive = false;
+        gold += this.target.reward;
+      }
+      this.alive = false;
+    } else {
+      this.pos.x += (dir.x / len) * step;
+      this.pos.y += (dir.y / len) * step;
+    }
+  }
+  draw() {
+    if (!this.alive) return;
+    ctx.beginPath();
+    ctx.arc(this.pos.x, this.pos.y, this.radius, 0, Math.PI*2);
+    ctx.fillStyle = "#fbbf24";
+    ctx.fill();
+  }
+}
+
+function drawPath() {
+  ctx.lineWidth = 18;
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(path[0].x, path[0].y);
+  for (const p of path.slice(1)) ctx.lineTo(p.x, p.y);
+  ctx.strokeStyle = "#1f2937";
+  ctx.stroke();
+
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(255,255,255,0.15)";
+  ctx.stroke();
+}
+
+let spawnTimer = 0;
+let spawning = false;
+let toSpawn = 0;
+
+function startWave() {
+  wave++;
+  spawning = true;
+  toSpawn = 8 + wave * 2;
+  spawnTimer = 0;
+}
+
+function update(dt) {
+  if (lives <= 0) return;
+
+  // auto-start a wave if none alive and not spawning
+  const anyAlive = enemies.some(e => e.alive);
+  if (!anyAlive && !spawning) startWave();
+
+  if (spawning) {
+    spawnTimer -= dt;
+    if (spawnTimer <= 0 && toSpawn > 0) {
+      enemies.push(new Enemy());
+      toSpawn--;
+      spawnTimer = 0.6; // spawn interval
+    }
+    if (toSpawn <= 0) spawning = false;
+  }
+
+  for (const e of enemies) e.update(dt);
+  for (const t of towers) t.update(dt);
+  for (const b of bullets) b.update(dt);
+
+  // cleanup
+  for (let i = bullets.length - 1; i >= 0; i--) if (!bullets[i].alive) bullets.splice(i,1);
+}
+
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawPath();
+
+  for (const t of towers) t.draw();
+  for (const e of enemies) e.draw();
+  for (const b of bullets) b.draw();
+
+  // HUD
+  statsEl.textContent = ` | Gold: ${gold} | Lives: ${lives} | Wave: ${wave}`;
+
+  if (lives <= 0) {
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = "#fff";
+    ctx.font = "48px system-ui";
+    ctx.fillText("Game Over", 340, 260);
+  }
+}
+
+canvas.addEventListener("click", (ev) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = ev.clientX - rect.left;
+  const y = ev.clientY - rect.top;
+
+  const towerCost = 10;
+  if (gold < towerCost) return;
+
+  // don't allow on the road (simple distance-to-segment check would be better;
+  // here we just block near path points as a crude rule)
+  for (const p of path) {
+    if (dist({x,y}, p) < 28) return;
+  }
+
+  towers.push(new Tower(x,y));
+  gold -= towerCost;
+});
+
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.033, (now - last) / 1000);
+  last = now;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
